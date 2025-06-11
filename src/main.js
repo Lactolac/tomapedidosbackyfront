@@ -3,7 +3,7 @@ import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router';
 // PrimeVue y estilos
-import '@/api-plugins/limpiarLocal'; // Importa tu store de autenticación
+import '@/api-plugins/authStores'; // Importa tu store de autenticación
 import Aura from '@primevue/themes/aura';
 import PrimeVue from 'primevue/config';
 import ConfirmationService from 'primevue/confirmationservice';

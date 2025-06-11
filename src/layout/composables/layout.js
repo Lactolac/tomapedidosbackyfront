@@ -3,33 +3,12 @@ import { computed, onMounted, onBeforeUnmount, reactive, watch } from 'vue';
 
 const layoutConfig = reactive({
     preset: 'Aura',
-    primary: 'orange',
+    primary: '#ff650f',
     surface: null,
-    darkTheme: false,
+    darkTheme: false, // Siempre claro
     menuMode: 'static',
-    darkModeStyles: [
-        { "elementType": "geometry", "stylers": [{ "color": "#2b2b2b" }] },
-        { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
-        { "elementType": "labels.text.fill", "stylers": [{ "color": "#8ec3b9" }] },
-        { "elementType": "labels.text.stroke", "stylers": [{ "color": "#1a3646" }] },
-        { "featureType": "administrative.country", "elementType": "geometry.stroke", "stylers": [{ "color": "#4b6878" }] },
-        { "featureType": "administrative.land_parcel", "stylers": [{ "visibility": "off" }] },
-        { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#c4d600" }] },
-        { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#283d6a" }] },
-        { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#6f9ba5" }] },
-        { "featureType": "poi.park", "elementType": "geometry.fill", "stylers": [{ "color": "#023e58" }] },
-        { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#38414e" }] },
-        { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#212a37" }] },
-        { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#9ca5b3" }] },
-        { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#746855" }] },
-        { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1f2835" }] },
-        { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#f3d19c" }] },
-        { "featureType": "transit", "elementType": "geometry", "stylers": [{ "color": "#2f3948" }] },
-        { "featureType": "transit.station", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
-        { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#17263c" }] },
-        { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#515c6d" }] },
-        { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#17263c" }] }
-    ],
+    // Puedes eliminar darkModeStyles si ya no los usas
+    darkModeStyles: [],
     lightModeStyles: [
         { "elementType": "geometry", "stylers": [{ "color": "#ebe3cd" }] },
         { "elementType": "labels.text.fill", "stylers": [{ "color": "#523735" }] },
@@ -68,19 +47,12 @@ export function useLayout() {
         layoutState.activeMenuItem = item.value || item;
     };
 
+    // Elimina la función toggleDarkMode o hazla vacía
     const toggleDarkMode = () => {
-        if (!document.startViewTransition) {
-            executeDarkModeToggle();
-            return;
-        }
-
-        document.startViewTransition(() => executeDarkModeToggle());
+        // Modo oscuro deshabilitado
     };
 
-    const executeDarkModeToggle = () => {
-        layoutConfig.darkTheme = !layoutConfig.darkTheme;
-        document.documentElement.classList.toggle('app-dark', layoutConfig.darkTheme);
-    };
+    // Elimina executeDarkModeToggle, ya no se necesita
 
     const toggleMenu = () => {
         if (layoutConfig.menuMode === 'overlay') {
@@ -96,24 +68,26 @@ export function useLayout() {
 
     const isSidebarActive = computed(() => layoutState.overlayMenuActive || layoutState.staticMenuMobileActive);
 
-    const isDarkTheme = computed(() => layoutConfig.darkTheme);
+    // Siempre modo claro
+    const isDarkTheme = computed(() => false);
 
     const getPrimary = computed(() => layoutConfig.primary);
 
     const getSurface = computed(() => layoutConfig.surface);
 
-    const getDarkModeStyles = computed(() => layoutConfig.darkModeStyles);
-
+    // Solo estilos claros
+    const getDarkModeStyles = computed(() => []);
     const getLightModeStyles = computed(() => layoutConfig.lightModeStyles);
 
+    // Siempre modo claro
     const updateDarkModeFromSystem = () => {
-        const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        layoutConfig.darkTheme = isSystemDark;
-        document.documentElement.classList.toggle('app-dark', isSystemDark);
+        layoutConfig.darkTheme = false;
+        document.documentElement.classList.remove('app-dark');
     };
 
     onMounted(() => {
         updateDarkModeFromSystem();
+        // Ya no es necesario escuchar cambios de sistema, pero si quieres puedes dejarlo para asegurar
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateDarkModeFromSystem);
     });
 
@@ -121,15 +95,16 @@ export function useLayout() {
         window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', updateDarkModeFromSystem);
     });
 
-    watch(() => layoutConfig.darkTheme, (newVal) => {
-        document.documentElement.classList.toggle('app-dark', newVal);
+    // Siempre modo claro, nunca agrega app-dark
+    watch(() => layoutConfig.darkTheme, () => {
+        document.documentElement.classList.remove('app-dark');
     });
 
     const showAlert = (titleOrOptions, text = '', icon = '', customOptions = {}) => {
-        const isDark = layoutConfig.darkTheme;
+        // Siempre claro
         const primaryColor = getPrimary.value;
-        const backgroundColor = isDark ? "#09090b" : "#ffffff";
-        const textColor = isDark ? "#ffffff" : "#000000";
+        const backgroundColor = "#ffffff";
+        const textColor = "#000000";
 
         let options = {};
 

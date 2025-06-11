@@ -164,3 +164,26 @@ applyTheme('primary', primaryColors.value.find((c) => c.name === 'orange'));
         </div>
     </div>
 </template>
+
+<style>
+.p-button-orange {
+  background-color: #ff650f !important;
+  border-color: #ff650f !important;
+  color: #fff !important;
+  font-weight: bold;
+}
+.p-button-orange:hover {
+  background-color: #c2410c !important;
+  border-color: #c2410c !important;
+}
+.p-button-primary {
+  background-color: #0056A6 !important;
+  border-color: #0056A6 !important;
+  color: #fff !important;
+  font-weight: bold;
+}
+.p-button-primary:hover {
+  background-color: #003e7e !important;
+  border-color: #003e7e !important;
+}
+</style>

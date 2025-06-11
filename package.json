@@ -1,5 +1,5 @@
 {
-    "name": "dashboardentregas",
+    "name": "tomapedidosfrontend",
     "version": "4.2.0",
     "scripts": {
         "dev": "vite",

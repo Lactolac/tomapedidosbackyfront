@@ -1,23 +1,30 @@
-# Etapa 1: Construcción
+# este docker sirve para levantar dos el backend y front end en un mismo si es express para que este todo bien
+
+# Etapa 1: Construcción del frontend
 FROM node:22.12.0-alpine AS build-stage
 
-# Establece el directorio de trabajo en el contenedor
-WORKDIR /app
-
-# Copia el package.json y package-lock.json al directorio de trabajo
+WORKDIR /app/frontend
 COPY package*.json ./
-
-# Instala las dependencias del proyecto
 RUN npm install
-
-# Copia el resto de los archivos de la aplicación al directorio de trabajo
 COPY . .
 
-# Compila la aplicación para producción
-RUN npm run build
+# Etapa 2: Imagen final con backend y frontend
+FROM node:22.12.0-alpine
 
-# Expone el puerto que usará la aplicación (ajusta según sea necesario)
-EXPOSE 5173
+WORKDIR /app
 
-# Comando para ejecutar la aplicación
-CMD ["npm", "run", "serve"]
+# Backend
+COPY ./backend/package*.json ./backend/
+RUN npm install --prefix ./backend
+COPY ./backend ./backend
+
+# Frontend desde build-stage
+COPY --from=build-stage /app/frontend ./frontend/
+
+# Instala concurrently para correr ambos servidores
+RUN npm install -g concurrently
+
+EXPOSE 5173 3000
+
+CMD ["concurrently", "\"cd /app/frontend && npm run dev -- --host 0.0.0.0 --port 5173\"", "\"cd /app/backend && node server.js\""]
+

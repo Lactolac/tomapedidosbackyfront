@@ -26,7 +26,15 @@ export default defineConfig({
         }
     },
     server: {
-          host: '0.0.0.0', // Esto hace que el servidor sea accesible desde cualquier dispositivo en la misma red
-          port: 5173, // O cualquier puerto que prefieras
+        host: '0.0.0.0', // Esto hace que el servidor sea accesible desde cualquier dispositivo en la misma red
+        port: 5173, // O cualquier puerto que prefieras
+        proxy: {
+            // Proxy todas las peticiones que empiecen con /api a tu backend
+            '/api': {
+                target: 'http://localhost:3000',
+                changeOrigin: true,
+                rewrite: path => path.replace(/^\/api/, '')
+            }
         }
+    }
 });
