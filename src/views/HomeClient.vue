@@ -11,7 +11,7 @@ import { useToast } from 'primevue/usetoast';
 const toast = useToast();
 const filtrosHistorial = ref({}); // key: kunnr, value: string de búsqueda
 const clientesAsociados = ref([]);
-const expandedRows = ref([]);
+const expandedRows = ref({});
 const authStore = useAuthStore();
 const router = useRouter();
 const { showAlert } = useLayout();
@@ -114,41 +114,6 @@ const productosSeleccionados = computed(() => {
   return Array.from(map.values());
 });
 
-// Nuevo método: Enviar pedido directamente al backend
-async function enviarPedidoDirecto() {
-  if (!productosSeleccionados.value.length) {
-    showAlert({ title: "Agrega cantidades", text: "Debes colocar cantidades antes de enviar.", icon: "warning" });
-    return;
-  }
-  try {
-    await axios.post('/api/pedidos/crear-pedidos', {
-      usuario_id: authStore.user.id,
-      productos: productosSeleccionados.value
-    }, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    });
-    showAlert({
-      title: "¡Pedido realizado!",
-      text: "Tu pedido fue enviado correctamente.",
-      icon: "success"
-    });
-    // Limpia cantidades
-    Object.keys(cantidades.value).forEach(key => cantidades.value[key] = 0);
-    cargarClienteYHistorial(); // Refresca datos si lo deseas
-
-    // Redireccionar a la pantalla de orderlist
-    setTimeout(() => {
-      router.push({ name: "OrderList" });
-    }, 700);
-  } catch (e) {
-    showAlert({
-      title: "Error",
-      text: "No se pudo enviar el pedido.",
-      icon: "error"
-    });
-  }
-}
-
 // Para formato de moneda si tienes precio
 function formatCurrency(value) {
   if (!value) return '';
@@ -209,97 +174,151 @@ function getSubtotalSucursal(kunnr, historial) {
     return sum + (cant * precio);
   }, 0);
 }
+
+function toggleExpand(kunnr) {
+  // Solo permite expandir una sucursal a la vez (opcional)
+  Object.keys(expandedRows.value).forEach(k => expandedRows.value[k] = false);
+  expandedRows.value[kunnr] = !expandedRows.value[kunnr];
+}
+
+function tieneProductosSeleccionados(kunnr) {
+  const cliente = clientesAsociados.value.find(c => c.kunnr === kunnr);
+  if (!cliente) return false;
+  return (cliente.historial || []).some(prod => (cantidades.value[`${kunnr}-${prod.matnr}`] || 0) > 0);
+}
+
+async function agregarAlCarrito(kunnr) {
+  const cliente = clientesAsociados.value.find(c => c.kunnr === kunnr);
+  if (!cliente) return;
+  const productos = (cliente.historial || []).filter(prod => (cantidades.value[`${kunnr}-${prod.matnr}`] || 0) > 0)
+    .map(prod => ({
+      kunnr,
+      matnr: prod.matnr,
+      arktx: prod.arktx,
+      cantidad: cantidades.value[`${kunnr}-${prod.matnr}`],
+      precio: getPrecioPorCodigo(prod.matnr) // <-- AGREGA ESTA LÍNEA
+    }));
+  if (!productos.length) {
+    showAlert({ title: "Agrega cantidades", text: "Debes colocar cantidades antes de enviar.", icon: "warning" });
+    return;
+  }
+  try {
+    await axios.post('/api/pedidos/crear-pedidos', {
+      usuario_id: authStore.user.id,
+      productos
+    }, {
+      headers: { Authorization: `Bearer ${authStore.token}` }
+    });
+    showAlert({
+      title: "¡Pedido realizado!",
+      text: "Tu pedido fue enviado correctamente.",
+      icon: "success"
+    });
+    // Limpia cantidades solo de esta sucursal
+    (cliente.historial || []).forEach(prod => {
+      cantidades.value[`${kunnr}-${prod.matnr}`] = 0;
+    });
+    // Opcional: refresca datos
+    cargarClienteYHistorial();
+    // Opcional: redirige
+    setTimeout(() => {
+      router.push({ name: "OrderList" });
+    }, 700);
+  } catch (e) {
+    showAlert({
+      title: "Error",
+      text: "No se pudo enviar el pedido.",
+      icon: "error"
+    });
+  }
+}
 </script>
 
 <template>
   <Toast />
   <div class="card">
-    <DataTable v-model:expandedRows="expandedRows" :value="clientesAsociados" dataKey="kunnr"
-      tableStyle="min-width: 60rem">
-      <template #header>
-        <div class="font-semibold text-xl mb-4">Sucursales y Pedidos</div>
-      </template>
-      <Column expander style="width: 5rem" />
-      <Column field="kunnr" header="Código"></Column>
-      <Column field="name1" header="Nombre"></Column>
-      <Column field="name2" header="Razon social"></Column>
-      <Column field="telf1" header="Telefono">
-        <template #body="slotProps">
-          {{ slotProps.data.telf1 && slotProps.data.telf1.trim() ? slotProps.data.telf1 : '-' }}
-        </template>
-      </Column>
-      <Column field="sortl" header="Atiende"></Column>
-      <Column field="stras" header="Ubicación"></Column>
-
-      <!-- Slot para mostrar mensaje si no hay clientes -->
-      <template #empty>
-        <div v-if="cargando" class="flex flex-col items-center py-8 text-lg text-gray-500">
-          <i class="pi pi-spin pi-spinner text-3xl mb-3 text-[#0056A6]"></i>
-          Cargando sucursales...
-        </div>
-        <div v-else class="text-center py-8 text-lg text-gray-500 flex flex-col items-center">
-          <img
-            src="https://img.icons8.com/?size=100&id=q3Sat36CVkrd&format=png&color=000000"
-            alt="Beginner Icon"
-            style="width: 48px; height: 48px; margin-bottom: 12px;"
-          />
-          No tienes sucursales asignadas.<br>
-          Pronto el equipo de LACTOLAC se comunicará con usted para validar su registro y asignarle su código.
-        </div>
-      </template>
-
-      <template #expansion="slotProps">
-        <div class="p-4">
-          <div class="flex items-center gap-4 mb-3">
-            <strong>
-              <h5 class="mb-0">Historial de Productos {{ slotProps.data.name1 }}</h5>
-            </strong>
-            <input v-model="filtrosHistorial[slotProps.data.kunnr]" type="text" placeholder="Buscar producto"
-              class="p-2 border rounded max-w-xs" />
-            <Button icon="pi pi-times" text v-if="filtrosHistorial[slotProps.data.kunnr]"
-              @click="filtrosHistorial[slotProps.data.kunnr] = ''" title="Limpiar búsqueda" />      
-          </div>
-          <DataTable :value="getHistorialFiltrado(slotProps.data.kunnr, slotProps.data.historial)"
-            tableStyle="min-width:40rem">
-            <Column field="arktx" header="Producto"></Column>
-            <Column field="matnr" header="Código Prod."></Column>
-            <Column header="Cantidad">
-              <template #body="prodProps">
-                <InputNumber v-model="cantidades[`${slotProps.data.kunnr}-${prodProps.data.matnr}`]" :min="0"
-                  showButtons buttonLayout="horizontal" inputStyle="width: 80px" />
-              </template>
-            </Column>
-            <Column header="Precio">
-              <template #body="prodProps">
-                {{ formatCurrency(getPrecioPorCodigo(prodProps.data.matnr)) }}
-              </template>
-            </Column>
-          </DataTable>
-          <span v-if="!getHistorialFiltrado(slotProps.data.kunnr, slotProps.data.historial).length">
-            No hay historial para este cliente o no hay coincidencias en la búsqueda.
-          </span>
-          <!-- Subtotal -->
-          <div class="flex justify-end mt-2" v-if="getSubtotalSucursal(slotProps.data.kunnr, slotProps.data.historial) > 0">
-            <span class="font-bold text-lg text-[#0056A6]">
-              Subtotal: {{ formatCurrency(getSubtotalSucursal(slotProps.data.kunnr, slotProps.data.historial)) }}
-            </span>
-          </div>
-        </div>
-      </template>
-    </DataTable>
-<div class="flex justify-end mt-4">
-      <Button label="Agregar al carrito" icon="pi pi-check" @click="enviarPedidoDirecto"
-        :disabled="!productosSeleccionados.length" />
+    <div v-if="cargando" class="text-lg text-center text-surface-400 my-12 flex flex-col items-center">
+      <i class="pi pi-spin pi-spinner text-3xl mb-3 text-[#0056A6]"></i>
+      Cargando sucursales y productos...
     </div>
-    <div v-if="sugerenciasGrupo.length" class="mb-6">
+    <div v-else class="flex flex-col gap-4">
+      <h2 class="text-2xl font-bold mb-4">Sucursales asociadas</h2>
+      <div
+        v-for="cliente in clientesAsociados"
+        :key="cliente.kunnr"
+        class="bg-white rounded shadow p-3"
+      >
+        <!-- Cabecera sucursal -->
+        <div class="flex items-center justify-between cursor-pointer" @click="toggleExpand(cliente.kunnr)">
+          <div>
+            <div class="font-bold text-[#0056A6]">{{ cliente.name1 }}</div>
+            <div class="text-s text-gray-500">Código: {{ cliente.kunnr }}</div>
+            <div class="text-s text-gray-500">Razón social: {{ cliente.name2 || '-' }}</div>
+            <div class="text-s text-gray-500">Teléfono: {{ cliente.telf1 && cliente.telf1.trim() ? cliente.telf1 : '-' }}</div>
+            <div class="text-s text-gray-500">Atiende: {{ cliente.sortl || '-' }}</div>
+            <div class="text-s text-gray-500">Ubicación: {{ cliente.stras || '-' }}</div>
+          </div>
+          <Button :icon="expandedRows[cliente.kunnr] ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" text />
+        </div>
+        <!-- Contenido expandido -->
+        <div v-if="expandedRows[cliente.kunnr]" class="mt-3">
+          <div class="flex items-center gap-4 mb-3 flex-wrap">
+            <h5 class="mb-0 font-semibold">Historial de Productos</h5>
+            <input v-model="filtrosHistorial[cliente.kunnr]" type="text" placeholder="Buscar producto"
+              class="p-2 border rounded max-w-xs" />
+            <Button icon="pi pi-times" text v-if="filtrosHistorial[cliente.kunnr]"
+              @click.stop="filtrosHistorial[cliente.kunnr] = ''" title="Limpiar búsqueda" />
+          </div>
+          <!-- Productos historial -->
+          <div class="flex gap-4 overflow-x-auto pb-2">
+            <div
+              v-for="prod in getHistorialFiltrado(cliente.kunnr, cliente.historial)"
+              :key="prod.matnr"
+              class="bg-blue-50 rounded shadow p-2 min-w-[200px] flex-shrink-0 flex flex-col"
+            >
+              <div class="font-bold text-[#0056A6] text-xs truncate">{{ prod.arktx }}</div>
+              <div class="text-xs text-gray-500">Código: {{ prod.matnr }}</div>
+              <div class="flex items-center gap-1 mt-1">
+                <InputNumber
+                  v-model="cantidades[`${cliente.kunnr}-${prod.matnr}`]"
+                  :min="0"
+                  showButtons
+                  buttonLayout="horizontal"
+                  inputStyle="width: 60px"
+                  class="w-full"
+                />
+                <span class="ml-auto text-xs font-semibold">
+                  {{ formatCurrency(getPrecioPorCodigo(prod.matnr)) }}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div v-if="!getHistorialFiltrado(cliente.kunnr, cliente.historial).length" class="text-xs text-gray-400 mt-2">
+            No hay historial para esta sucursal o no hay coincidencias en la búsqueda.
+          </div>
+          <!-- Subtotal y botón -->
+          <div class="flex justify-between items-center mt-2">
+            <span v-if="getSubtotalSucursal(cliente.kunnr, cliente.historial) > 0" class="font-bold text-lg text-[#0056A6]">
+              Subtotal: {{ formatCurrency(getSubtotalSucursal(cliente.kunnr, cliente.historial)) }}
+            </span>
+            <Button label="Agregar al carrito" icon="pi pi-check" size="small"
+              @click.stop="agregarAlCarrito(cliente.kunnr)"
+              :disabled="!tieneProductosSeleccionados(cliente.kunnr)" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sugerencias -->
+    <div v-if="sugerenciasGrupo.length" class="mb-6 mt-8">
       <div class="font-semibold text-lg mb-2 text-[#0056A6]">
         Productos que podrían interesarte y que tu competencia ya está comprando.
       </div>
-      <div class="flex flex-wrap gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div
           v-for="prod in sugerenciasGrupo"
           :key="prod.matnr"
-          class="bg-white rounded shadow p-3 flex flex-col items-center w-48 cursor-pointer hover:bg-blue-50 transition"
+          class="bg-white rounded shadow p-3 flex flex-col items-center cursor-pointer hover:bg-blue-50 transition"
           @click="agregarSugeridoAlExpandido(prod)"
           :title="'Agregar este producto a tu sucursal que este expandida'"
         >
@@ -307,12 +326,10 @@ function getSubtotalSucursal(kunnr, historial) {
           <span class="text-xs text-gray-500 mb-2">Código: {{ prod.matnr }}</span>
           <span class="text-sm text-gray-700">Comprado {{ prod.total }} veces</span>
           <span class="text-sm text-gray-700">
-  Precio: {{ formatCurrency(getPrecioPorCodigo(prod.matnr)) }}
-</span>
+            Precio: {{ formatCurrency(getPrecioPorCodigo(prod.matnr)) }}
+          </span>
         </div>
       </div>
     </div>
-
-    
   </div>
 </template>

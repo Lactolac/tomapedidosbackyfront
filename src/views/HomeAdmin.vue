@@ -340,62 +340,111 @@ function rowClassUsuario(user) {
             </template>
         </Toolbar>
 
-        <DataTable
-            ref="dt"
-            v-model:selection="selectedUsers"
-            :value="usersClientes"
-            dataKey="id"
-            :filters="filters"
-            :loading="loading"
-            :rowClass="rowClassUsuario"
-        >
-            <template #header>
-                <div class="flex flex-wrap gap-2 items-center justify-between">
-                    <h4 class="m-0">Usuarios</h4>
-                    <IconField>
-                        <InputIcon>
-                            <i class="pi pi-search" />
-                        </InputIcon>
-                        <InputText v-model="filters['global'].value" placeholder="Buscar..." />
-                    </IconField>
-                </div>
-            </template>
-
-            <Column selectionMode="multiple" style="width: 3rem" :exportable="false"></Column>
-            <Column field="username" header="Usuario" sortable style="min-width: 10rem"></Column>
-            <Column field="email" header="Email" sortable style="min-width: 14rem"></Column>
-            <Column field="kunnr" header="Clientes asignados" style="min-width: 14rem">
-                <template #body="slotProps">
-                    <span v-if="slotProps.data.kunnr?.length">
-                        {{
-                            slotProps.data.kunnr
-                                .map(cliente => cliente.name2 && cliente.name2.trim() ? cliente.name2 : cliente.name1 ||
-                                    cliente.kunnr)
-                        .join(', ')
-                        }}
-                    </span>
-                    <span v-else>Sin asociar</span>
-                </template>
-            </Column>
-            <Column header="Fecha de creación">
-                <template #body="slotProps">
-                    {{ formatDate(slotProps.data.created_at) }}
-                </template>
-            </Column>
-            <Column :exportable="false" header="Acciones">
-                <template #body="slotProps">
-                    <div class="flex flex-col gap-2">
-                        <Button label="Asignar cliente(s)" icon="pi pi-user-plus" rounded size="small"
-                            @click="openAssignDialog(slotProps.data)" />
-                        <Button label="Ubicación" icon="pi pi-map-marker" rounded size="small" severity="info"
-                            @click="openGeoDialog(slotProps.data)"
-                            :disabled="!slotProps.data.lat || !slotProps.data.lng" />
+        <div class="w-full overflow-x-auto hidden sm:block">
+            <DataTable
+                ref="dt"
+                v-model:selection="selectedUsers"
+                :value="usersClientes"
+                dataKey="id"
+                :filters="filters"
+                :loading="loading"
+                :rowClass="rowClassUsuario"
+                responsiveLayout="scroll"
+                class="text-xs sm:text-base lg:text-m min-w-[600px] sm:min-w-0"
+            >
+                <template #header>
+                    <div class="flex flex-wrap gap-2 items-center justify-between">
+                        <h4 class="m-0">Usuarios</h4>
+                        <IconField>
+                            <InputIcon>
+                                <i class="pi pi-search" />
+                            </InputIcon>
+                            <InputText v-model="filters['global'].value" placeholder="Buscar..." />
+                        </IconField>
                     </div>
                 </template>
-            </Column>
-        </DataTable>
 
-        <Dialog v-model:visible="assignDialog" :style="{ width: '500px' }" header="Asignar cliente(s)" :modal="true">
+                <Column selectionMode="multiple" style="width: 3rem" :exportable="false"></Column>
+                <Column field="username" header="Usuario" sortable style="min-width: 10rem"></Column>
+                <Column field="email" header="Email" sortable style="min-width: 14rem"></Column>
+                <Column field="kunnr" header="Clientes asignados" style="min-width: 14rem">
+                    <template #body="slotProps">
+                        <span v-if="slotProps.data.kunnr?.length">
+                            {{
+                                slotProps.data.kunnr
+                                    .map(cliente => cliente.name2 && cliente.name2.trim() ? cliente.name2 : cliente.name1 ||
+                                        cliente.kunnr)
+                            .join(', ')
+                            }}
+                        </span>
+                        <span v-else>Sin asociar</span>
+                    </template>
+                </Column>
+                <Column header="Fecha de creación">
+                    <template #body="slotProps">
+                        {{ formatDate(slotProps.data.created_at) }}
+                    </template>
+                </Column>
+                <Column :exportable="false" header="Acciones">
+                    <template #body="slotProps">
+                        <div class="flex flex-col gap-2 sm:flex-row">
+                            <Button label="Asignar cliente(s)" icon="pi pi-user-plus" rounded size="small"
+                                @click="openAssignDialog(slotProps.data)" />
+                            <Button label="Ubicación" icon="pi pi-map-marker" rounded size="small" severity="info"
+                                @click="openGeoDialog(slotProps.data)"
+                                :disabled="!slotProps.data.lat || !slotProps.data.lng" />
+                        </div>
+                    </template>
+                </Column>
+            </DataTable>
+        </div>
+
+        <!-- Cards para móvil -->
+        <div class="flex flex-col gap-4 sm:hidden mt-4">
+  <div
+    v-for="user in usersClientes"
+    :key="user.id"
+    class="bg-white rounded shadow p-4"
+  >
+    <div class="flex items-center justify-between mb-2">
+      <div>
+        <div class="font-bold text-[#0056A6] text-base">{{ user.username }}</div>
+        <div class="text-xs text-gray-500">{{ user.email }}</div>
+      </div>
+      <span
+        class="px-2 py-1 rounded text-xs"
+        :class="esUsuarioNuevo(user.created_at) ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'"
+      >
+        {{ formatDate(user.created_at) }}
+      </span>
+    </div>
+    <div class="mb-2">
+      <span class="font-semibold text-xs">Clientes asignados:</span>
+      <div class="text-xs text-gray-700">
+        <span v-if="user.kunnr?.length">
+          {{
+            user.kunnr
+              .map(cliente => cliente.name2 && cliente.name2.trim() ? cliente.name2 : cliente.name1 || cliente.kunnr)
+              .join(', ')
+          }}
+        </span>
+        <span v-else>Sin asociar</span>
+      </div>
+    </div>
+    <div class="flex flex-col gap-2 mt-2">
+      <Button label="Asignar cliente(s)" icon="pi pi-user-plus" rounded size="small"
+        @click="openAssignDialog(user)" class="w-full" />
+      <Button label="Ubicación" icon="pi pi-map-marker" rounded size="small" severity="info"
+        @click="openGeoDialog(user)" :disabled="!user.lat || !user.lng" class="w-full" />
+    </div>
+  </div>
+</div>
+
+        <Dialog v-model:visible="assignDialog"
+  :style="{ width: '95vw', maxWidth: '500px', padding: '0.5rem' }"
+  header="Asignar cliente(s)"
+  :modal="true"
+>
             <div class="flex flex-col gap-4 py-4">
                 <span class="font-semibold">Usuario: {{ userToAssign?.username }}</span>
                 <MultiSelect v-model="selectedKunnr" :options="clientes" optionLabel="name2" optionValue="kunnr"
@@ -425,7 +474,11 @@ function rowClassUsuario(user) {
         </Dialog>
 
         <!-- Diálogo para crear usuario -->
-        <Dialog v-model:visible="createDialog" :style="{ width: '400px' }" header="Crear usuario cliente" :modal="true">
+        <Dialog v-model:visible="createDialog"
+  :style="{ width: '95vw', maxWidth: '400px', padding: '0.5rem' }"
+  header="Crear usuario cliente"
+  :modal="true"
+>
             <div class="flex flex-col gap-4 py-4">
                 <InputText v-model="newUser.username" placeholder="Nombre de usuario" class="w-full" />
                 <InputText v-model="newUser.email" placeholder="Correo electrónico" class="w-full" />

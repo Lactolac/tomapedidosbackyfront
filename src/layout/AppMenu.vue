@@ -55,6 +55,11 @@ const adminMenu = [
         icon: "pi pi-fw pi-users",
         to: { name: "HomeAdmin" },
       },
+      {
+        label: "Administrar pedidos",
+        icon: "pi pi-fw pi-shopping-cart",
+        to: { name: "AdminPedidos" },
+      },
       // Puedes agregar más ítems de admin aquí
     ],
   },

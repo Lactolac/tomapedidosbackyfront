@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 import DataView from 'primevue/dataview';
 import Tag from 'primevue/tag';
@@ -219,12 +219,16 @@ function esPedidoDeHoy(fechaPedido) {
     fecha.getFullYear() === hoy.getFullYear()
   );
 }
+
+const pedidosOrdenados = computed(() =>
+  [...pedidos.value].sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+);
 </script>
 
 <template>
   <div class="flex flex-col">
     <div class="card">
-      <div class="font-semibold text-xl mb-6">Pedidos realizados</div>
+      <h2 class="text-2xl font-bold mb-4">Pedidos realizados</h2>
 
       <div v-if="cargando" class="text-lg text-center text-surface-400 my-12 flex flex-col items-center">
         <i class="pi pi-spin pi-spinner text-3xl mb-3 text-[#0056A6]"></i>
@@ -235,31 +239,26 @@ function esPedidoDeHoy(fechaPedido) {
       </div>
 
       <div
-        v-for="pedido in pedidos"
+        v-for="pedido in pedidosOrdenados"
         :key="pedido.id"
-        class="mb-10"
+        class="mb-8"
       >
         <div
           :class="[
-            'p-4 rounded',
-            pedido.sap === 1 ? 'bg-green-100 border-green-400' : '',
-            esPedidoDeHoy(pedido.fecha) ? 'bg-green-200 border-green-600' : ''
+            'p-4 rounded shadow',
+            esPedidoDeHoy(pedido.fecha)
+              ? 'bg-green-200 border-green-600'
+              : 'bg-white border border-surface-200'
           ]"
-          style="border: 2px solid transparent; border-radius: 8px;"
+          style="border-radius: 12px;"
         >
-          <div class="mb-2 flex flex-col md:flex-row md:items-center md:justify-between">
+          <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <span class="font-bold">N° Pedido:</span> {{ pedido.id }}
-              <span class="ml-4 font-bold">Fecha:</span> {{ pedido.fecha }}
-              <span class="ml-4 font-bold">Cliente: </span>
-              <span>
-                {{ pedido.kunnr }}
-                <template v-if="pedido.name1 || pedido.name2">
-                  - {{ pedido.name1 || '' }}<template v-if="pedido.name2"> - {{ pedido.name2 }}</template>
-                </template>
-              </span>
+              <div class="font-bold text-base mb-1">N° Pedido: <span class="font-normal">{{ pedido.id }}</span></div>
+              <div class="text-sm text-gray-500 mb-1">Fecha: {{ pedido.fecha }}</div>
+              <div class="text-sm text-gray-500">Cliente: {{ pedido.kunnr }} - {{ pedido.name1 }}</div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 mt-2 sm:mt-0">
               <Button v-if="pedido.estado && pedido.estado.toLowerCase() === 'pendiente'" label="Procesar pedido"
                 icon="pi pi-check-circle" severity="success" text @click="procesarPedido(pedido)" />
               <Tag :value="pedido.estado" :severity="getEstadoTag(pedido.estado)" class="uppercase ml-2" />
@@ -272,11 +271,11 @@ function esPedidoDeHoy(fechaPedido) {
           </div>
 
           <!-- DataView de productos -->
-          <DataView :value="pedido.pedido_detalles" :layout="layout" >
+          <DataView :value="pedido.pedido_detalles" :layout="layout">
             <template #grid="slotProps">
               <div
                 :class="[
-                  'grid grid-cols-12 gap-2 w-full rounded',
+                  'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 w-full rounded',
                   esPedidoDeHoy(pedido.fecha) ? 'bg-green-200 border-green-200' : ''
                 ]"
                 style="min-height: 140px;"
@@ -284,34 +283,35 @@ function esPedidoDeHoy(fechaPedido) {
                 <div
                   v-for="(item, index) in slotProps.items"
                   :key="index"
-                  class="col-span-12 sm:col-span-3 lg:col-span-2 p-1 w-full"
+                  class="p-1 w-full"
                 >
                   <div
                     :class="[
-                      'p-2 rounded flex flex-col h-full',
-                      esPedidoDeHoy(pedido.fecha) ? 'bg-green-200 border-green-200' : 'border border-green-200'
+                      'p-2 rounded flex flex-col h-full shadow-sm',
+                      esPedidoDeHoy(pedido.fecha) ? 'bg-green-200 border-green-200' : 'border border-green-200 bg-white'
                     ]"
                   >
-                    <div>
-                      <div class="text-base font-medium"><strong>{{ item.arktx }}</strong></div>
-                      <span class="text-sm font-medium">Código: {{ item.matnr }}</span>
+                    <div class="font-semibold text-base mb-1">{{ item.arktx }}</div>
+                    <div class="text-xs text-gray-500 mb-1">Código: {{ item.matnr }}</div>
+                    <div class="flex items-center gap-2 mt-1">
+                      <template v-if="editandoPedido === pedido.id">
+                        <InputNumber
+                          v-model="cantidadesEdit[`${pedido.id}-${item.matnr}`]"
+                          :min="0"
+                          showButtons
+                          buttonLayout="horizontal"
+                          inputStyle="width: 60px"
+                          class="w-full"
+                        />
+                      </template>
+                      <template v-else>
+                        <div class="bg-orange-400 text-white rounded-full px-3 py-1 text-xs font-bold">
+                          {{ item.cantidad }} Unidades
+                        </div>
+                      </template>
                     </div>
-                    <!-- Unidades abajo -->
-                    <div class="mt-1 flex flex-row items-center gap-2">
-                      <div style="background: #f97316;" class="p-1 rounded-full flex items-center gap-2 px-2">
-                        <template v-if="editandoPedido === pedido.id">
-                          <InputNumber v-model="cantidadesEdit[`${pedido.id}-${item.matnr}`]" :min="0"
-                            inputStyle="width:50px; font-size:0.85rem;" />
-                        </template>
-                        <template v-else>
-                          <span class="text-base text-white">
-                            <strong>Unidades: {{ item.cantidad }}</strong>
-                          </span>
-                        </template>
-                      </div>
-                    </div>
-                    <div class="flex flex-col gap-4 mt-3">
-                      <span class="text-base font-semibold">{{ formatCurrency(item.precio) }}</span>
+                    <div class="mt-2 text-right font-semibold text-sm">
+                      {{ formatCurrency(item.precio) }}
                     </div>
                   </div>
                 </div>
@@ -319,15 +319,8 @@ function esPedidoDeHoy(fechaPedido) {
             </template>
           </DataView>
 
-          <!-- Botones de guardar/cancelar edición -->
-          <div v-if="editandoPedido === pedido.id" class="flex justify-end gap-2 mt-3">
-            <Button label="Guardar" icon="pi pi-check" severity="success" @click="guardarEdicion(pedido)" />
-            <Button label="Cancelar" icon="pi pi-times" severity="danger" outlined @click="cancelarEdicion" />
-          </div>
-          
-          <!-- Total -->
-          <div class="flex justify-end mt-2">
-            <span class="font-bold text-lg">
+          <div class="flex justify-end mt-3">
+            <span class="font-bold text-lg text-[#0056A6]">
               Total: {{
                 formatCurrency(
                   (pedido.pedido_detalles || []).reduce(
@@ -337,6 +330,11 @@ function esPedidoDeHoy(fechaPedido) {
                 )
               }}
             </span>
+          </div>
+
+          <div v-if="editandoPedido === pedido.id" class="flex gap-2 justify-end mt-2">
+            <Button label="Guardar" icon="pi pi-save" severity="success" @click="guardarEdicion(pedido)" />
+            <Button label="Cancelar" icon="pi pi-times" severity="danger" @click="cancelarEdicion" text />
           </div>
         </div>
       </div>

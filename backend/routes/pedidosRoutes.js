@@ -19,4 +19,8 @@ router.delete('/eliminar/:id', pedidoController.eliminarPedido);
 
 //Actualizar cantidades de un pedido (PUT) 
 router.put('/actualizar-cantidades/:id', pedidoController.actualizarCantidadesPedido);
+
+// Listar todos los pedidos (ADMIN)
+router.get('/listar-pedidos', pedidoController.listarTodosPedidos);
+
 module.exports = router;

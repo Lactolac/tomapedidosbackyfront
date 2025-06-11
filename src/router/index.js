@@ -52,6 +52,12 @@ const routes = [
         component: () => import('@/views/HomeAdmin.vue'),
         meta: { requiresAuth: true, requiresAdmin: true }, // <--- PROTECCIÓN SOLO ADMIN
       },
+      {
+        path: 'PedidosAdmin',
+        name: 'AdminPedidos',
+        component: () => import('@/views/AdminPedidos.vue'),
+        meta: { requiresAuth: true, requiresAdmin: true}
+      }
     ],
   },
 ];

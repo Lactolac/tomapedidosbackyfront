@@ -205,3 +205,45 @@ exports.procesarPedidoSAP = async (req, res) => {
     });
   }
 };
+
+// Listar todos los pedidos (para admin)
+exports.listarTodosPedidos = async (req, res) => {
+  try {
+    // 1. Trae todos los pedidos con sus detalles
+    const pedidos = await Pedido.findAll({
+      include: [{ model: PedidoDetalle }],
+      order: [['fecha', 'DESC']]
+    });
+
+    if (!pedidos.length) {
+      return res.json([]);
+    }
+
+    // 2. Trae los kunnr únicos de todos los pedidos
+    const kunnrList = pedidos.map(p => p.kunnr);
+
+    // 3. Trae los datos de cliente para cada kunnr
+    const clientes = await sequelize.query(
+      `SELECT kunnr, name1, name2 FROM clientes_view WHERE kunnr IN (:kunnrList)`,
+      {
+        replacements: { kunnrList },
+        type: sequelize.QueryTypes.SELECT
+      }
+    );
+    const clientesMap = {};
+    clientes.forEach(c => {
+      clientesMap[c.kunnr] = c;
+    });
+
+    // 4. Agrega los datos de cliente a cada pedido
+    const pedidosConCliente = pedidos.map(p => ({
+      ...p.toJSON(),
+      name1: clientesMap[p.kunnr]?.name1 || '',
+      name2: clientesMap[p.kunnr]?.name2 || ''
+    }));
+
+    res.json(pedidosConCliente);
+  } catch (error) {
+    res.status(500).json({ message: "Error al obtener todos los pedidos", error });
+  }
+};
