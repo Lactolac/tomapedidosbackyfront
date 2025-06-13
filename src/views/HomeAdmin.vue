@@ -60,7 +60,7 @@ onMounted(async () => {
         });
         clientes.value = clientesRes.data.map(c => ({
             ...c,
-            displayName: `${c.kunnr} - ${c.name1 || ''} - ${c.name2 || ''}`
+            displayName: `${c.kunnr}-${c.name2 || ''}`
         }));
 
         // Asigna kunnr a cada usuario
@@ -111,7 +111,7 @@ async function cargarClientesDropdown(reset = false) {
         if (res.data.length < limitClientes.value) hasMoreClientes.value = false;
         const nuevos = res.data.map(c => ({
             ...c,
-            name2: c.name2 && c.name2.trim() ? c.name2 : (c.name1 || c.kunnr)
+            displayName: `${c.kunnr}-${c.name2 || ''}`
         }));
         // Mezcla sin duplicar
         clientes.value = [
@@ -364,28 +364,35 @@ function rowClassUsuario(user) {
                     </div>
                 </template>
 
-                <Column selectionMode="multiple" style="width: 3rem" :exportable="false"></Column>
-                <Column field="username" header="Usuario" sortable style="min-width: 10rem"></Column>
-                <Column field="email" header="Email" sortable style="min-width: 14rem"></Column>
-                <Column field="kunnr" header="Clientes asignados" style="min-width: 14rem">
+                <Column selectionMode="multiple" style="width: 3rem" :exportable="false"
+                    headerStyle="background-color: #0056A6; color: white;" />
+                <Column field="username" header="Usuario" sortable style="min-width: 10rem"
+                    headerStyle="background-color: #0056A6; color: white;" />
+                <Column field="email" header="Email" sortable style="min-width: 14rem"
+                    headerStyle="background-color: #0056A6; color: white;" />
+                <!-- Tabla: columna Clientes asignados -->
+                <Column field="kunnr" header="Clientes asignados" style="min-width: 14rem"
+                    headerStyle="background-color: #0056A6; color: white;">
                     <template #body="slotProps">
-                        <span v-if="slotProps.data.kunnr?.length">
+                        <span v-if="Array.isArray(slotProps.data.kunnr) && slotProps.data.kunnr.length">
                             {{
                                 slotProps.data.kunnr
-                                    .map(cliente => cliente.name2 && cliente.name2.trim() ? cliente.name2 : cliente.name1 ||
-                                        cliente.kunnr)
-                            .join(', ')
+                                    .filter(cliente => cliente && typeof cliente === 'object' && cliente.kunnr)
+                                    .map(cliente => `${cliente.kunnr}-${cliente.name2 || ''}`)
+                                    .join(', ')
                             }}
                         </span>
                         <span v-else>Sin asociar</span>
                     </template>
                 </Column>
-                <Column header="Fecha de creación">
+                <Column header="Fecha de creación"
+                    headerStyle="background-color: #0056A6; color: white;">
                     <template #body="slotProps">
                         {{ formatDate(slotProps.data.created_at) }}
                     </template>
                 </Column>
-                <Column :exportable="false" header="Acciones">
+                <Column :exportable="false" header="Acciones"
+                    headerStyle="background-color: #0056A6; color: white;">
                     <template #body="slotProps">
                         <div class="flex flex-col gap-2 sm:flex-row">
                             <Button label="Asignar cliente(s)" icon="pi pi-user-plus" rounded size="small"
@@ -421,10 +428,11 @@ function rowClassUsuario(user) {
     <div class="mb-2">
       <span class="font-semibold text-xs">Clientes asignados:</span>
       <div class="text-xs text-gray-700">
-        <span v-if="user.kunnr?.length">
+        <span v-if="Array.isArray(user.kunnr) && user.kunnr.length">
           {{
             user.kunnr
-              .map(cliente => cliente.name2 && cliente.name2.trim() ? cliente.name2 : cliente.name1 || cliente.kunnr)
+              .filter(cliente => cliente && typeof cliente === 'object' && cliente.kunnr)
+              .map(cliente => `${cliente.kunnr}-${cliente.name2 || ''}`)
               .join(', ')
           }}
         </span>
@@ -447,9 +455,19 @@ function rowClassUsuario(user) {
 >
             <div class="flex flex-col gap-4 py-4">
                 <span class="font-semibold">Usuario: {{ userToAssign?.username }}</span>
-                <MultiSelect v-model="selectedKunnr" :options="clientes" optionLabel="name2" optionValue="kunnr"
-                    placeholder="Selecciona uno o más clientes" class="w-full" filter display="chip"
-                    :loading="loadingClientes" @filter="onClienteFilter" @scroll="onClienteScroll" />
+                <MultiSelect
+                  v-model="selectedKunnr"
+                  :options="clientes"
+                  optionLabel="displayName"
+                  optionValue="kunnr"
+                  placeholder="Selecciona uno o más clientes"
+                  class="w-full"
+                  filter
+                  display="chip"
+                  :loading="loadingClientes"
+                  @filter="onClienteFilter"
+                  @scroll="onClienteScroll"
+                />
             </div>
             <template #footer>
                 <Button label="Cancelar" icon="pi pi-times" text @click="assignDialog = false" />
@@ -457,7 +475,7 @@ function rowClassUsuario(user) {
             </template>
         </Dialog>
 
-        <Dialog v-model:visible="geoDialog" :style="{ width: '95vw', maxWidth: '1200px', minHeight: '80vh' }"
+        <Dialog v-model:visible="geoDialog" :style="{ width: '95vw', maxWidth: '1200px', minHeight: '80vh'}"
             header="Ubicación de registro" :modal="true">
             <div v-if="geoUser && geoUser.lat && geoUser.lng" style="height: 70vh;">
                 <div class="mb-2 flex items-center gap-2">

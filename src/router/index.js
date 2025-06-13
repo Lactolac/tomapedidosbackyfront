@@ -47,6 +47,12 @@ const routes = [
         meta: { requiresAuth: true, requiresClient: true },
       },
       {
+        path: 'EstadoCuenta',
+        name: 'EstadoCuenta',
+        component: () => import('@/views/EstadoCuenta.vue'),
+        meta: { requiresAuth: true, requiresClient: true },
+      },
+      {
         path: 'HomeAdmin',
         name: 'HomeAdmin',
         component: () => import('@/views/HomeAdmin.vue'),

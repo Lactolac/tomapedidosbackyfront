@@ -6,7 +6,8 @@ const {
     getHistorialDeUsuario,    
     deleteUser,
     getAllClientes, // <--- ¡IMPORTANTE! Para el dropdown de clientes
-    getSugerenciasGrupo
+    getSugerenciasGrupo,
+    getAllDocsUsuario
 } = require('../controllers/userAdminController');
 
 const router = express.Router();
@@ -31,5 +32,8 @@ router.delete('/users/:userId', deleteUser);
 
 // Obtener sugerencias de grupo para un usuario
 router.get('/users/:userId/sugerencias-grupo', getSugerenciasGrupo);
+
+//Obtener las cuentas por cobrar de todos los clientes por sap
+router.get('/users/:userId/alldocs', getAllDocsUsuario);
 
 module.exports = router;

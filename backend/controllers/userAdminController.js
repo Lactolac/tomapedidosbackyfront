@@ -66,7 +66,7 @@ exports.getAllClientes = async (req, res) => {
   try {
     let query = `
       SELECT kunnr, name1, name2, sortl, doc_type,detalle_grupo
-      FROM clientes_view
+      FROM clientes_view_mat
     `;
     let replacements = { limit, offset };
 
@@ -102,7 +102,7 @@ exports.getClientesDeUsuario = async (req, res) => {
 
     // Sequelize espera el array así, pero si no funciona prueba con :...kunnrList
     const clientesUsuario = await sequelize.query(
-      `SELECT * FROM clientes_view WHERE kunnr IN (:kunnrList)`,
+      `SELECT * FROM clientes_view_mat WHERE kunnr IN (:kunnrList)`,
       {
         replacements: { kunnrList },
         type: sequelize.QueryTypes.SELECT
@@ -200,8 +200,46 @@ exports.getSugerenciasGrupo = async (req, res) => {
     });
 
     // Devuelve los productos más comprados por el grupo (puedes limitar a top 10)
-    res.json(Object.values(sugerencias).sort((a, b) => b.total - a.total).slice(0, 10));
+    const palabrasProhibidas = ['SUBWAY'];
+    const sugerenciasFiltradas = Object.values(sugerencias)
+      .filter(item => {
+        const desc = (item.arktx || '').toUpperCase();
+        // Excluye si contiene alguna palabra prohibida en cualquier parte
+        return !palabrasProhibidas.some(palabra => desc.includes(palabra));
+      })
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+
+    res.json(sugerenciasFiltradas);
   } catch (error) {
     res.status(500).json({ message: "Error obteniendo sugerencias de grupo", error: error.toString() });
+  }
+};
+
+exports.getAllDocsUsuario = async (req, res) => {
+  const { userId } = req.params;
+  try {
+    // 1. Buscar los clientes asociados al usuario
+    const asignaciones = await UsuarioCliente.findAll({ where: { usuario_id: userId } });
+    const kunnrList = asignaciones.map(a => a.kunnr);
+
+    if (!kunnrList.length) return res.json([]);
+
+    // 2. Consultar la función externa para cada cliente y unir resultados
+    let allDocs = [];
+    for (const kunnr of kunnrList) {
+      try {
+        const sapRes = await axios.get(`http://10.10.4.139:3000/functionfs?path=ZRFC_GET_CXC&where=IR_KUNNR=${kunnr}`);
+        if (Array.isArray(sapRes.data.ET_RESULT)) {
+          allDocs = allDocs.concat(sapRes.data.ET_RESULT);
+        }
+      } catch (e) {
+        // Si falla un cliente, continúa con los demás
+      }
+    }
+
+    res.json(allDocs);
+  } catch (error) {
+    res.status(500).json({ message: "Error obteniendo documentos del usuario", error: error.toString() });
   }
 };

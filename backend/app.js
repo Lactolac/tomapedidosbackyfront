@@ -11,13 +11,17 @@ require('dotenv').config();
 const app = express();
 
 // Middleware para habilitar CORS
-app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173', // URL del cliente (frontend)
-    methods: ['GET', 'POST', 'PUT', 'DELETE'], // Métodos permitidos
-    credentials: true, // Permitir envío de cookies y cabeceras de autenticación
-  })
-);
+app.use((req, res, next) => {
+  const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 // Middleware para procesar JSON y datos de formularios
 app.use(bodyParser.json());

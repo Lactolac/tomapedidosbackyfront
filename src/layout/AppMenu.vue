@@ -32,7 +32,7 @@ const clientMenu = [
       {
         label: "Estado de cuenta",
         icon: "pi pi-fw pi-money-bill",
-        to: { name: "OrderList" },
+        to: { name: "EstadoCuenta" },
         title: "Visualiza y paga tus facturas aquí",
       },
       {

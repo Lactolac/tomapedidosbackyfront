@@ -7,16 +7,16 @@ import { useLayout } from "@/layout/composables/layout";
 import InputNumber from 'primevue/inputnumber';
 import Button from 'primevue/button';
 import { useToast } from 'primevue/usetoast';
+import Dropdown from 'primevue/dropdown';
 
 const toast = useToast();
-const filtrosHistorial = ref({}); // key: kunnr, value: string de búsqueda
+const filtrosHistorial = ref({});
 const clientesAsociados = ref([]);
-const expandedRows = ref({});
 const authStore = useAuthStore();
 const router = useRouter();
 const { showAlert } = useLayout();
 
-const cantidades = ref({}); // key: `${kunnr}-${matnr}` value: cantidad
+const cantidades = ref({});
 const cargando = ref(false);
 
 if (authStore.user?.role !== "client") {
@@ -43,22 +43,19 @@ const cargarClienteYHistorial = async () => {
       headers: { Authorization: `Bearer ${authStore.token}` }
     });
 
-    // Agrupa los productos/historial por cliente
     const grouped = {};
     for (const entry of historialRes.data) {
       const kunag = entry.kunag;
       if (!grouped[kunag]) grouped[kunag] = [];
-      // Solo agrega si no existe ya ese matnr para ese cliente
       if (!grouped[kunag].some(e => e.matnr === entry.matnr)) {
         grouped[kunag].push({
           ...entry,
-          cantidad: 0 // Para v-model
+          cantidad: 0
         });
       }
     }
     clientesRes.data.forEach(cliente => {
       cliente.historial = grouped[cliente.kunnr] || [];
-      // Inicializa cantidades por producto
       cliente.historial.forEach(prod => {
         cantidades.value[`${cliente.kunnr}-${prod.matnr}`] = 0;
       });
@@ -87,65 +84,15 @@ async function cargarSugerenciasGrupo() {
 onMounted(() => {
   cargarClienteYHistorial();
   cargarSugerenciasGrupo();
-  cargarPrecios(); // <-- agrega esta línea
+  cargarPrecios();
 });
 
-// Computed: productos seleccionados para el pedido (no repetir mismo producto/cliente)
-const productosSeleccionados = computed(() => {
-  const map = new Map();
-  clientesAsociados.value.forEach(cliente => {
-    (cliente.historial || []).forEach(prod => {
-      const cant = cantidades.value[`${cliente.kunnr}-${prod.matnr}`];
-      if (cant && cant > 0) {
-        const key = `${cliente.kunnr}-${prod.matnr}`;
-        map.set(key, {
-          kunnr: cliente.kunnr,
-          name1: cliente.name1,
-          name2: cliente.name2,
-          matnr: prod.matnr,
-          arktx: prod.arktx,
-          cantidad: cant,
-          image: prod.image || null,
-          sortl: cliente.sortl || "" // <-- AGREGADO sortl
-        });
-      }
-    });
-  });
-  return Array.from(map.values());
-});
-
-// Para formato de moneda si tienes precio
 function formatCurrency(value) {
   if (!value) return '';
   return value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
-function agregarSugeridoAlExpandido(producto) {
-  const kunnrExpandido = Object.keys(expandedRows.value).find(k => expandedRows.value[k]);
-  if (!kunnrExpandido) {
-    toast.add({ severity: 'warn', summary: 'Selecciona una sucursal', detail: 'Expande una sucursal para agregar el producto.', life: 2500 });
-    return;
-  }
-  const cliente = clientesAsociados.value.find(c => c.kunnr === kunnrExpandido);
-  if (!cliente) return;
-  if (cliente.historial.some(p => p.matnr === producto.matnr)) {
-    toast.add({ severity: 'info', summary: 'Ya agregado', detail: 'Este producto ya está en tu historial.', life: 2000 });
-    return;
-  }
-  cliente.historial.push({
-    ...producto,
-    cantidad: 0
-  });
-  cantidades.value[`${cliente.kunnr}-${producto.matnr}`] = 0;
-  toast.add({
-    severity: 'success',
-    summary: 'Producto agregado',
-    detail: `El producto ${producto.arktx} está disponible para pedir en ${cliente.name1}.`,
-    life: 2000
-  });
-}
-
-const precios = ref([]); // [{ PRODUCTO: '140280', PRECIO: 12.5 }, ...]
+const precios = ref([]);
 
 async function cargarPrecios() {
   try {
@@ -175,12 +122,6 @@ function getSubtotalSucursal(kunnr, historial) {
   }, 0);
 }
 
-function toggleExpand(kunnr) {
-  // Solo permite expandir una sucursal a la vez (opcional)
-  Object.keys(expandedRows.value).forEach(k => expandedRows.value[k] = false);
-  expandedRows.value[kunnr] = !expandedRows.value[kunnr];
-}
-
 function tieneProductosSeleccionados(kunnr) {
   const cliente = clientesAsociados.value.find(c => c.kunnr === kunnr);
   if (!cliente) return false;
@@ -196,7 +137,7 @@ async function agregarAlCarrito(kunnr) {
       matnr: prod.matnr,
       arktx: prod.arktx,
       cantidad: cantidades.value[`${kunnr}-${prod.matnr}`],
-      precio: getPrecioPorCodigo(prod.matnr) // <-- AGREGA ESTA LÍNEA
+      precio: getPrecioPorCodigo(prod.matnr)
     }));
   if (!productos.length) {
     showAlert({ title: "Agrega cantidades", text: "Debes colocar cantidades antes de enviar.", icon: "warning" });
@@ -214,13 +155,10 @@ async function agregarAlCarrito(kunnr) {
       text: "Tu pedido fue enviado correctamente.",
       icon: "success"
     });
-    // Limpia cantidades solo de esta sucursal
     (cliente.historial || []).forEach(prod => {
       cantidades.value[`${kunnr}-${prod.matnr}`] = 0;
     });
-    // Opcional: refresca datos
     cargarClienteYHistorial();
-    // Opcional: redirige
     setTimeout(() => {
       router.push({ name: "OrderList" });
     }, 700);
@@ -232,104 +170,233 @@ async function agregarAlCarrito(kunnr) {
     });
   }
 }
+
+const dialogSucursalVisible = ref(false);
+const sucursalSeleccionada = ref(null);
+
+function abrirSucursal(cliente) {
+  sucursalSeleccionada.value = cliente;
+  dialogSucursalVisible.value = true;
+}
+
+// Sugerencias: agregar directo o con dropdown
+function agregarSugeridoDirecto(prod) {
+  let cliente;
+  if (clientesAsociados.value.length === 1) {
+    cliente = clientesAsociados.value[0];
+  } else {
+    return;
+  }
+  if (cliente.historial.some(p => p.matnr === prod.matnr)) {
+    toast.add({ severity: 'info', summary: 'Ya agregado', detail: 'Este producto ya está en el historial.', life: 2000 });
+    return;
+  }
+  cliente.historial.push({ ...prod, cantidad: 0 });
+  cantidades.value[`${cliente.kunnr}-${prod.matnr}`] = 0;
+  toast.add({
+    severity: 'success',
+    summary: 'Producto agregado',
+    detail: `El producto ${prod.arktx} está disponible para pedir en ${cliente.name1}.`,
+    life: 2000
+  });
+}
+
+function agregarSugeridoASucursal(prod, kunnr) {
+  const cliente = clientesAsociados.value.find(c => c.kunnr === kunnr);
+  if (!cliente) return;
+  if (cliente.historial.some(p => p.matnr === prod.matnr)) {
+    toast.add({ severity: 'info', summary: 'Ya agregado', detail: 'Este producto ya está en el historial.', life: 2000 });
+    return;
+  }
+  cliente.historial.push({ ...prod, cantidad: 0 });
+  cantidades.value[`${cliente.kunnr}-${prod.matnr}`] = 0;
+  toast.add({
+    severity: 'success',
+    summary: 'Producto agregado',
+    detail: `El producto ${prod.arktx} está disponible para pedir en ${cliente.name1}.`,
+    life: 2000
+  });
+}
 </script>
 
 <template>
   <Toast />
-  <div class="card">
+  <!-- Banner superior tipo ecommerce moderno con 4 imágenes decorativas en mosaico -->
+  <div class="w-full rounded-2xl overflow-hidden flex flex-col sm:flex-row items-center justify-between bg-gradient-to-br from-[#1166bb] to-[#3b82f6] shadow-lg mb-8 min-h-[180px] relative">
+    <!-- Texto a la izquierda -->
+    <div class="flex-1 flex flex-col justify-center px-8 py-8 z-10">
+      <h1 class="text-3xl sm:text-4xl font-extrabold text-white mb-2">
+        ¡Hola {{ (authStore.user?.username || 'CLIENTE').toUpperCase() }}!
+      </h1>
+      <p class="text-white text-lg sm:text-xl">
+        Selecciona una sucursal para ver tu historial de compras y realizar tu pedido.
+      </p>
+    </div>
+    <!-- Imágenes decorativas a la derecha, en grid 2x2 compacto -->
+    <div class="hidden sm:grid grid-cols-2 grid-rows-2 gap-2 items-center justify-end pr-6 py-4 z-0">
+      <img
+        src="@/assets/images/banner.png"
+        alt="Banner"
+        class="object-cover rounded-xl shadow-lg w-32 h-16 opacity-70"
+        style="max-width:120px; min-width:80px;"
+      />
+      <img
+        src="@/assets/images/banner3.png"
+        alt="Banner 3"
+        class="object-cover rounded-xl shadow-lg w-32 h-16 opacity-70"
+        style="max-width:120px; min-width:80px;"
+      />
+      <img
+        src="@/assets/images/banner2.png"
+        alt="Banner 2"
+        class="object-cover rounded-xl shadow-lg w-32 h-16 opacity-70"
+        style="max-width:120px; min-width:80px;"
+      />
+      <img
+        src="@/assets/images/banner4.png"
+        alt="Banner 4"
+        class="object-cover rounded-xl shadow-lg w-32 h-16 opacity-70"
+        style="max-width:120px; min-width:80px;"
+      />
+    </div>
+  </div>
+
+  <div class="container mx-auto px-2">
     <div v-if="cargando" class="text-lg text-center text-surface-400 my-12 flex flex-col items-center">
       <i class="pi pi-spin pi-spinner text-3xl mb-3 text-[#0056A6]"></i>
       Cargando sucursales y productos...
     </div>
-    <div v-else class="flex flex-col gap-4">
-      <h2 class="text-2xl font-bold mb-4">Sucursales asociadas</h2>
+
+    <!-- Grid de sucursales tipo catálogo -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
       <div
         v-for="cliente in clientesAsociados"
         :key="cliente.kunnr"
-        class="bg-white rounded shadow p-3"
+        class="bg-white rounded-xl shadow-lg p-6 flex flex-col items-start transition relative cursor-pointer group
+               hover:shadow-2xl hover:border-2 hover:border-[#ff650f]"
+        @click="abrirSucursal(cliente)"
+        tabindex="0"
+        title="Ver historial de compra"
+        style="border: 2px solid transparent;"
       >
-        <!-- Cabecera sucursal -->
-        <div class="flex items-center justify-between cursor-pointer" @click="toggleExpand(cliente.kunnr)">
+        <div class="flex items-center gap-3 mb-2">
+          <div class="bg-[#0056A6] text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg">
+            {{ cliente.name1?.charAt(0) || '?' }}
+          </div>
           <div>
-            <div class="font-bold text-[#0056A6]">{{ cliente.name1 }}</div>
-            <div class="text-s text-gray-500">Código: {{ cliente.kunnr }}</div>
-            <div class="text-s text-gray-500">Razón social: {{ cliente.name2 || '-' }}</div>
-            <div class="text-s text-gray-500">Teléfono: {{ cliente.telf1 && cliente.telf1.trim() ? cliente.telf1 : '-' }}</div>
-            <div class="text-s text-gray-500">Atiende: {{ cliente.sortl || '-' }}</div>
-            <div class="text-s text-gray-500">Ubicación: {{ cliente.stras || '-' }}</div>
+            <div class="font-bold text-[#0056A6] text-2xl">{{ cliente.name1 }}</div>
+            <div class="text-base text-gray-500">Código: {{ cliente.kunnr }}</div>
           </div>
-          <Button :icon="expandedRows[cliente.kunnr] ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" text />
         </div>
-        <!-- Contenido expandido -->
-        <div v-if="expandedRows[cliente.kunnr]" class="mt-3">
-          <div class="flex items-center gap-4 mb-3 flex-wrap">
-            <h5 class="mb-0 font-semibold">Historial de Productos</h5>
-            <input v-model="filtrosHistorial[cliente.kunnr]" type="text" placeholder="Buscar producto"
-              class="p-2 border rounded max-w-xs" />
-            <Button icon="pi pi-times" text v-if="filtrosHistorial[cliente.kunnr]"
-              @click.stop="filtrosHistorial[cliente.kunnr] = ''" title="Limpiar búsqueda" />
-          </div>
-          <!-- Productos historial -->
-          <div class="flex gap-4 overflow-x-auto pb-2">
-            <div
-              v-for="prod in getHistorialFiltrado(cliente.kunnr, cliente.historial)"
-              :key="prod.matnr"
-              class="bg-blue-50 rounded shadow p-2 min-w-[200px] flex-shrink-0 flex flex-col"
-            >
-              <div class="font-bold text-[#0056A6] text-xs truncate">{{ prod.arktx }}</div>
-              <div class="text-xs text-gray-500">Código: {{ prod.matnr }}</div>
-              <div class="flex items-center gap-1 mt-1">
-                <InputNumber
-                  v-model="cantidades[`${cliente.kunnr}-${prod.matnr}`]"
-                  :min="0"
-                  showButtons
-                  buttonLayout="horizontal"
-                  inputStyle="width: 60px"
-                  class="w-full"
-                />
-                <span class="ml-auto text-xs font-semibold">
-                  {{ formatCurrency(getPrecioPorCodigo(prod.matnr)) }}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div v-if="!getHistorialFiltrado(cliente.kunnr, cliente.historial).length" class="text-xs text-gray-400 mt-2">
-            No hay historial para esta sucursal o no hay coincidencias en la búsqueda.
-          </div>
-          <!-- Subtotal y botón -->
-          <div class="flex justify-between items-center mt-2">
-            <span v-if="getSubtotalSucursal(cliente.kunnr, cliente.historial) > 0" class="font-bold text-lg text-[#0056A6]">
-              Subtotal: {{ formatCurrency(getSubtotalSucursal(cliente.kunnr, cliente.historial)) }}
-            </span>
-            <Button label="Agregar al carrito" icon="pi pi-check" size="small"
-              @click.stop="agregarAlCarrito(cliente.kunnr)"
-              :disabled="!tieneProductosSeleccionados(cliente.kunnr)" />
-          </div>
+        <div class="text-base text-gray-500 mb-1">Razón social: {{ cliente.name2 || '-' }}</div>
+        <div class="text-base text-gray-500 mb-1">Teléfono: {{ cliente.telf1 && cliente.telf1.trim() ? cliente.telf1 : '-' }}</div>
+        <div class="text-base text-gray-500 mb-1">Atiende: {{ cliente.sortl || '-' }}</div>
+        <div class="text-base text-gray-500 mb-3">Ubicación: {{ cliente.stras || '-' }}</div>
+        <div
+          class="mt-auto w-full text-center font-semibold text-lg group-hover:text-[#ff650f] group-focus:text-[#ff650f] transition-colors"
+        >
+          Ver historial de compra
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Sugerencias -->
-    <div v-if="sugerenciasGrupo.length" class="mb-6 mt-8">
-      <div class="font-semibold text-lg mb-2 text-[#0056A6]">
-        Productos que podrían interesarte y que tu competencia ya está comprando.
+  <!-- Panel/modal de productos de sucursal -->
+  <Dialog v-model:visible="dialogSucursalVisible" :style="{ width: '95vw', maxWidth: '700px' }" :modal="true" :closable="true">
+    <template #header>
+      <div class="flex flex-col">
+        <span class="font-bold text-[#0056A6] text-lg">{{ sucursalSeleccionada?.name1 }}</span>
+        <span class="text-xs text-gray-500">Código: {{ sucursalSeleccionada?.kunnr }}</span>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    </template>
+    <div>
+      <div class="flex items-center gap-2 mb-3">
+        <input v-model="filtrosHistorial[sucursalSeleccionada?.kunnr]" type="text" placeholder="Buscar producto"
+          class="p-2 border rounded w-full" />
+        <Button icon="pi pi-times" text v-if="filtrosHistorial[sucursalSeleccionada?.kunnr]"
+          @click="filtrosHistorial[sucursalSeleccionada?.kunnr] = ''" title="Limpiar búsqueda" />
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto">
         <div
-          v-for="prod in sugerenciasGrupo"
+          v-for="prod in getHistorialFiltrado(sucursalSeleccionada?.kunnr, sucursalSeleccionada?.historial)"
           :key="prod.matnr"
-          class="bg-white rounded shadow p-3 flex flex-col items-center cursor-pointer hover:bg-blue-50 transition"
-          @click="agregarSugeridoAlExpandido(prod)"
-          :title="'Agregar este producto a tu sucursal que este expandida'"
+          class="bg-blue-50 rounded shadow p-3 flex flex-col"
         >
-          <span class="font-bold text-[#0056A6] text-center">{{ prod.arktx }}</span>
-          <span class="text-xs text-gray-500 mb-2">Código: {{ prod.matnr }}</span>
-          <span class="text-sm text-gray-700">Comprado {{ prod.total }} veces</span>
-          <span class="text-sm text-gray-700">
-            Precio: {{ formatCurrency(getPrecioPorCodigo(prod.matnr)) }}
-          </span>
+          <div class="font-bold text-[#0056A6] text-xs truncate">{{ prod.arktx }}</div>
+          <div class="text-xs text-gray-500">Código: {{ prod.matnr }}</div>
+          <div class="flex items-center gap-1 mt-1">
+            <InputNumber
+              v-model="cantidades[`${sucursalSeleccionada?.kunnr}-${prod.matnr}`]"
+              :min="0"
+              showButtons
+              buttonLayout="horizontal"
+              inputStyle="width: 60px"
+              class="w-full"
+            />
+            <span class="ml-auto text-xs font-semibold">
+              {{ formatCurrency(getPrecioPorCodigo(prod.matnr)) }}
+            </span>
+          </div>
         </div>
       </div>
+      <div v-if="!getHistorialFiltrado(sucursalSeleccionada?.kunnr, sucursalSeleccionada?.historial)?.length" class="text-xs text-gray-400 mt-2">
+        No hay historial para esta sucursal o no hay coincidencias en la búsqueda.
+      </div>
+      <div class="flex justify-between items-center mt-4">
+        <span v-if="getSubtotalSucursal(sucursalSeleccionada?.kunnr, sucursalSeleccionada?.historial) > 0" class="font-bold text-lg text-[#0056A6]">
+          Subtotal: {{ formatCurrency(getSubtotalSucursal(sucursalSeleccionada?.kunnr, sucursalSeleccionada?.historial)) }}
+        </span>
+        <Button label="Realizar pedido" icon="pi pi-check"
+          @click="agregarAlCarrito(sucursalSeleccionada?.kunnr)"
+          :disabled="!tieneProductosSeleccionados(sucursalSeleccionada?.kunnr)" />
+      </div>
+    </div>
+  </Dialog>
+
+  <!-- Sugerencias de productos -->
+  <div v-if="sugerenciasGrupo.length" class="mt-12">
+    <h2 class="text-2xl font-bold mb-4 text-[#0056A6]">
+      Productos que podrían interesarte y que tu competencia ya está comprando!.
+    </h2>
+    <p class="mb-4 text-gray-600 text-lg">
+      Si algún producto sugerido es de tu interés, selecciónalo y agrégalo a la sucursal donde deseas pedirlo.
+    </p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+      <div
+        v-for="prod in sugerenciasGrupo"
+        :key="prod.matnr"
+        class="bg-white rounded-xl shadow p-4 flex flex-col items-center transition cursor-pointer group
+               hover:shadow-2xl hover:border-2 hover:border-[#ff650f]"
+        style="border: 2px solid transparent;"
+      >
+        <div class="font-bold text-[#0056A6] text-center mb-1 text-xl transition-colors group-hover:text-[#ff650f]">
+          {{ prod.arktx }}
+        </div>
+        <div class="text-base text-gray-500 mb-1">Código: {{ prod.matnr }}</div>
+        <div class="text-base text-gray-500 mb-1">Comprado {{ prod.total }} veces</div>
+        <div class="text-lg text-gray-700 mb-2">
+          Precio: {{ formatCurrency(getPrecioPorCodigo(prod.matnr)) }}
+        </div>
+        <Dropdown
+          v-if="clientesAsociados.length > 1"
+          :options="clientesAsociados"
+          optionLabel="name1"
+          optionValue="kunnr"
+          placeholder="Agregar a sucursal"
+          class="w-full"
+          @change="val => agregarSugeridoASucursal(prod, val.value)"
+        />
+        <Button
+          v-else
+          label="Agregar a sucursal"
+          icon="pi pi-plus"
+          size="small"
+          @click.stop="agregarSugeridoDirecto(prod)"
+        />
+      </div>
+    </div>
+    <div class="text-base text-gray-400 mt-2">
+      <!-- Solo mensaje de éxito se muestra al agregar, no mensajes de expandir -->
     </div>
   </div>
 </template>
