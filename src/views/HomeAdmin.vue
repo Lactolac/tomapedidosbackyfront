@@ -92,11 +92,7 @@ async function cargarClientesDropdown(reset = false) {
     loadingClientes.value = true;
     try {
         if (reset) {
-            // Mantén los seleccionados aunque resetees
-            const seleccionados = clientes.value.filter(c =>
-                selectedKunnr.value.includes(c.kunnr)
-            );
-            clientes.value = [...seleccionados];
+            clientes.value = [];
             pageClientes.value = 1;
             hasMoreClientes.value = true;
         }
@@ -113,7 +109,6 @@ async function cargarClientesDropdown(reset = false) {
             ...c,
             displayName: `${c.kunnr}-${c.name2 || ''}`
         }));
-        // Mezcla sin duplicar
         clientes.value = [
             ...clientes.value,
             ...nuevos.filter(nuevo =>
@@ -146,22 +141,10 @@ function onClienteFilter(event) {
 
 function openAssignDialog(user) {
     userToAssign.value = user;
-    // IDs seleccionados
     selectedKunnr.value = (user.kunnr || []).map(c => typeof c === 'object' ? c.kunnr : c);
-
-    // --- NUEVO: agrega los clientes asignados al array clientes si no están ---
-    const asignados = (user.kunnr || []).map(c =>
-        typeof c === 'object' ? c : clientes.value.find(cli => cli.kunnr === c)
-    );
-    asignados.forEach(asignado => {
-        if (asignado && !clientes.value.some(cli => cli.kunnr === asignado.kunnr)) {
-            clientes.value.push(asignado);
-        }
-    });
-
     assignDialog.value = true;
     searchClientes.value = '';
-    cargarClientesDropdown(true);
+    // No llames cargarClientesDropdown aquí si ya tienes todos los clientes cargados
 }
 
 async function asociarClientes() {
@@ -467,6 +450,7 @@ function rowClassUsuario(user) {
                   :loading="loadingClientes"
                   @filter="onClienteFilter"
                   @scroll="onClienteScroll"
+                  :virtualScrollerOptions="{ itemSize: 38 }"
                 />
             </div>
             <template #footer>
